@@ -10,12 +10,11 @@ services:
       - POSTGRES_PASSWORD=skyvern
       - POSTGRES_DB=skyvern
     healthcheck:
-      test:
-        - CMD-SHELL
-        - 'pg_isready -U skyvern'
+      test: ['CMD-SHELL', 'pg_isready -U skyvern']
       interval: 5s
       timeout: 5s
       retries: 5
+
   skyvern:
     image: 'public.ecr.aws/skyvern/skyvern:latest'
     restart: on-failure
@@ -29,34 +28,34 @@ services:
       - './log:/data/log'
       - './.streamlit:/app/.streamlit'
     environment:
-      - 'DATABASE_STRING=postgresql+psycopg://skyvern:skyvern@postgres:5432/skyvern'
+      - DATABASE_STRING=postgresql+psycopg://skyvern:skyvern@postgres:5432/skyvern
       - BROWSER_TYPE=chromium-headful
       - ENABLE_CODE_BLOCK=true
       - VITE_ENABLE_CODE_BLOCK=true
-      - 'LLM_KEY=${LLM_KEY}'
-      - 'SECONDARY_LLM_KEY=${SECONDARY_LLM_KEY}'
-      - 'GEMINI_API_KEY=${GEMINI_API_KEY}'
-      - 'ENABLE_GEMINI=${ENABLE_GEMINI}'
-      - 'CORS_ORIGIN=${CORS_ORIGIN}'
-      - 'SKYVERN_API_KEY=${SKYVERN_API_KEY}'
-      - 'API_DOMAIN=${API_DOMAIN}'
-      - 'ARTIFACT_DOMAIN=${ARTIFACT_DOMAIN}'
-      - 'SKYVERN_AUTH_BITWARDEN_CLIENT_ID=${SKYVERN_AUTH_BITWARDEN_CLIENT_ID}'
-      - 'SKYVERN_AUTH_BITWARDEN_CLIENT_SECRET=${SKYVERN_AUTH_BITWARDEN_CLIENT_SECRET}'
-      - 'SKYVERN_AUTH_BITWARDEN_MASTER_PASSWORD=${SKYVERN_BITWARDEN_MASTER_PASSWORD}'
-      - 'BITWARDEN_SERVER=${BITWARDEN_SERVER}'
+      # Provide literal values or leave these; they can be empty if not needed.
+      - LLM_KEY=${LLM_KEY}
+      - SECONDARY_LLM_KEY=${SECONDARY_LLM_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - ENABLE_GEMINI=${ENABLE_GEMINI}
+      - CORS_ORIGIN=${CORS_ORIGIN}
+      - SKYVERN_API_KEY=${SKYVERN_API_KEY}
+      - API_DOMAIN=${API_DOMAIN}
+      - ARTIFACT_DOMAIN=${ARTIFACT_DOMAIN}
+      # IMPORTANT: Skyvern should call the CLI service on the Docker network
+      - BITWARDEN_SERVER=http://bitwarden-cli:8087
+      # Remove Compose-time interpolation for these; set them in Coolify env for the skyvern container:
+      # SKYVERN_AUTH_BITWARDEN_CLIENT_ID
+      # SKYVERN_AUTH_BITWARDEN_CLIENT_SECRET
+      # SKYVERN_AUTH_BITWARDEN_MASTER_PASSWORD
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
-      test:
-        - CMD
-        - test
-        - '-f'
-        - /app/.streamlit/secrets.toml
+      test: ['CMD', 'test', '-f', '/app/.streamlit/secrets.toml']
       interval: 5s
       timeout: 5s
       retries: 5
+
   skyvern-ui:
     image: 'public.ecr.aws/skyvern/skyvern-ui:latest'
     restart: on-failure
@@ -69,14 +68,15 @@ services:
       - './har:/data/har'
       - './.streamlit:/app/.streamlit'
     environment:
-      - 'VITE_API_BASE_URL=${VITE_API_BASE_URL}'
-      - 'VITE_WSS_BASE_URL=${VITE_WSS_BASE_URL}'
-      - 'VITE_ARTIFACT_API_BASE_URL=${VITE_ARTIFACT_API_BASE_URL}'
-      - 'VITE_ENVIRONMENT=${VITE_ENVIRONMENT}'
-      - 'VITE_SKYVERN_API_KEY=${VITE_SKYVERN_API_KEY}'
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL}
+      - VITE_WSS_BASE_URL=${VITE_WSS_BASE_URL}
+      - VITE_ARTIFACT_API_BASE_URL=${VITE_ARTIFACT_API_BASE_URL}
+      - VITE_ENVIRONMENT=${VITE_ENVIRONMENT}
+      - VITE_SKYVERN_API_KEY=${VITE_SKYVERN_API_KEY}
     depends_on:
       skyvern:
         condition: service_healthy
+
   vaultwarden:
     image: 'vaultwarden/server:latest-alpine'
     container_name: vaultwarden
@@ -84,30 +84,26 @@ services:
     environment:
       DOMAIN: 'https://vaultwarden.points.place'
       SIGNUPS_ALLOWED: 'false'
-      BW_HOST: 'https://vaultwarden.points.place'
-      BW_CLIENTID: '${SKYVERN_AUTH_BITWARDEN_CLIENT_ID}'
-      BW_CLIENTSECRET: '${SKYVERN_AUTH_BITWARDEN_CLIENT_SECRET}'
-      BW_PASSWORD: '${SKYVERN_AUTH_BITWARDEN_MASTER_PASSWORD}'
+      # Remove BW_* here; vaultwarden doesn't use them.
     volumes:
       - '~/vw-data/:/data/'
     ports:
       - '127.0.0.1:11002:80'
+
   bitwarden-cli:
-    environment:
-      - 'BITWARDEN_SERVER=http://localhost'
-      - BITWARDEN_SERVER_PORT=8002
-      - 'BW_HOST=https://localhost'
-      - 'BW_PASSWORD=${SKYVERN_AUTH_BITWARDEN_MASTER_PASSWORD}'
-      - BW_USERNAME=brant.olson@gmail.com
+    image: 'ghcr.io/olsonbd/bitwarden-cli:latest'
+    restart: unless-stopped
     ports:
       - '127.0.0.1:8002:8087'
-    restart: unless-stopped
+    environment:
+      # IMPORTANT: talk to vaultwarden via service DNS, not localhost
+      - BW_HOST=http://vaultwarden
+      # Do NOT interpolate here; set these three in Coolify for this service:
+      # BW_CLIENTID
+      # BW_CLIENTSECRET
+      # BW_PASSWORD
     healthcheck:
-      test:
-        - CMD
-        - curl
-        - '-f'
-        - 'http://localhost:8087/status'
+      test: ['CMD', 'curl', '-f', 'http://localhost:8087/status']
       interval: 30s
       timeout: 10s
       retries: 5
@@ -119,4 +115,3 @@ services:
       - '~/bitwarden-cli-config:/app/.config'
     labels:
       - traefik.enable=false
-    image: 'ghcr.io/olsonbd/bitwarden-cli:latest'
