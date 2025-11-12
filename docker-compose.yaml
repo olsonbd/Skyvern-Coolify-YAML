@@ -19,9 +19,6 @@ services:
   skyvern:
     image: 'public.ecr.aws/skyvern/skyvern:latest'
     restart: on-failure
-    ports:
-      - '8088:8000'
-      - '9222:9222'
     volumes:
       - './artifacts:/data/artifacts'
       - './videos:/data/videos'
@@ -60,9 +57,6 @@ services:
   skyvern-ui:
     image: 'public.ecr.aws/skyvern/skyvern-ui:latest'
     restart: on-failure
-    ports:
-      - '8888:8080'
-      - '9090:9090'
     volumes:
       - './artifacts:/data/artifacts'
       - './videos:/data/videos'
@@ -86,8 +80,6 @@ services:
       SIGNUPS_ALLOWED: 'false'
     volumes:
       - '~/vw-data/:/data/'
-    ports:
-      - '127.0.0.1:11002:80'
   bitwarden-cli:
     image: 'ghcr.io/olsonbd/bitwarden-cli:latest'
     restart: unless-stopped
